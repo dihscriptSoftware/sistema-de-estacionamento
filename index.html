@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Estacionamento</title>
+  <style>
+    /* Estilização básica */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f0f0f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .container {
+      width: 95%;
+      max-width: 1200px;
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .actions {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      color: white;
+    }
+
+    .entry-btn { background-color: #4CAF50; }
+    .exit-btn { background-color: #f44336; }
+    .clear-btn { background-color: #444; }
+    .save-btn { background-color: #008CBA; }
+
+    .search input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+
+    .table-container {
+      overflow-y: auto;
+      max-height: 300px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    table th, table td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    table th {
+      background-color: #f4f4f4;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+
+    /* Modal */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .modal-content {
+      background-color: white;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .modal button {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    .close-btn {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Botões -->
+    <div class="actions">
+      <button class="entry-btn" onclick="showModal('entryModal')">Entrada de Veículo</button>
+      <button class="exit-btn" onclick="showModal('exitModal')">Saída de Veículo</button>
+      <button class="clear-btn" onclick="clearAll()">Excluir Todos os Registros</button>
+      <button class="save-btn" onclick="saveToFile()">Salvar</button>
+    </div>
+
+    <!-- Pesquisa -->
+    <div class="search">
+      <input type="text" id="searchInput" placeholder="Pesquisar por placa, modelo ou cliente" onkeyup="filterTable()">
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Modelo</th>
+            <th>Cliente</th>
+            <th>Tempo</th>
+            <th>Valor</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="vehicleTable"></tbody>
+      </table>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="stats">
+      <div>Total de Veículos: <span id="totalVehicles">0</span></div>
+      <div>Ganhos Totais: R$<span id="totalEarnings">0.00</span></div>
+    </div>
+  </div>
+
+  <!-- Modal Entrada -->
+  <div id="entryModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('entryModal')">&times;</span>
+      <h3>Entrada de Veículo</h3>
+      <input id="entryPlate" placeholder="Placa do Veículo">
+      <input id="entryModel" placeholder="Modelo do Veículo">
+      <input id="entryClient" placeholder="Nome do Cliente">
+      <input id="entryRate" type="number" placeholder="Valor por Hora (R$)">
+      <button onclick="registerEntry()">Registrar Entrada</button>
+    </div>
+  </div>
+
+  <!-- Modal Saída -->
+  <div id="exitModal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeModal('exitModal')">&times;</span>
+      <h3>Saída de Veículo</h3>
+      <input id="exitPlate" placeholder="Placa do Veículo">
+      <button onclick="registerExit()">Registrar Saída</button>
+    </div>
+  </div>
+<script>
+    // Atualizações principais:
+    let vehicles = JSON.parse(localStorage.getItem("vehicles")) || [];
+    let totalEarnings = parseFloat(localStorage.getItem("totalEarnings")) || 0;
+
+    function saveData() {
+        localStorage.setItem("vehicles", JSON.stringify(vehicles));
+        localStorage.setItem("totalEarnings", totalEarnings.toFixed(2));
+    }
+
+    function showModal(modalId) {
+        document.getElementById(modalId).style.display = "block";
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = "none";
+    }
+
+    function registerEntry() {
+        const plate = document.getElementById("entryPlate").value.trim();
+        const model = document.getElementById("entryModel").value.trim();
+        const client = document.getElementById("entryClient").value.trim();
+        const rate = parseFloat(document.getElementById("entryRate").value);
+
+        if (plate && model && client && rate > 0) {
+            vehicles.push({
+                plate,
+                model,
+                client,
+                rate,
+                entryTime: Date.now(),
+                status: "Estacionado",
+                earnings: 0,
+            });
+            saveData();
+            closeModal("entryModal");
+            updateTable();
+        } else {
+            alert("Preencha todos os campos corretamente!");
+        }
+    }
+
+    function registerExit() {
+        const plate = document.getElementById("exitPlate").value.trim();
+        const vehicle = vehicles.find((v) => v.plate === plate && v.status === "Estacionado");
+
+        if (vehicle) {
+            const timeParked = Math.ceil((Date.now() - vehicle.entryTime) / (1000 * 60 * 60));
+            vehicle.earnings = timeParked * vehicle.rate;
+            vehicle.status = "Saiu";
+            totalEarnings += vehicle.earnings;
+
+            saveData();
+            closeModal("exitModal");
+            updateTable();
+        } else {
+            alert("Veículo não encontrado ou já saiu.");
+        }
+    }
+
+    function updateTable() {
+        const tableBody = document.getElementById("vehicleTable");
+        tableBody.innerHTML = vehicles
+            .map((v) => {
+                const elapsedTime =
+                    v.status === "Estacionado"
+                        ? formatElapsedTime(Date.now() - v.entryTime)
+                        : "-";
+                const currentValue =
+                    v.status === "Estacionado"
+                        ? ((Date.now() - v.entryTime) / (1000 * 60 * 60)) * v.rate
+                        : v.earnings.toFixed(2);
+
+                return `
+                    <tr>
+                        <td>${v.plate}</td>
+                        <td>${v.model}</td>
+                        <td>${v.client}</td>
+                        <td>${elapsedTime}</td>
+                        <td>R$ ${currentValue}</td>
+                        <td>${v.status}</td>
+                    </tr>
+                `;
+            })
+            .join("");
+
+        document.getElementById("totalVehicles").innerText = vehicles.filter(
+            (v) => v.status === "Estacionado"
+        ).length;
+        document.getElementById("totalEarnings").innerText = totalEarnings.toFixed(2);
+    }
+
+    function formatElapsedTime(milliseconds) {
+        const totalSeconds = Math.floor(milliseconds / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        return `${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    function clearAll() {
+        if (confirm("Deseja realmente excluir todos os registros?")) {
+            vehicles = [];
+            totalEarnings = 0;
+            saveData();
+            updateTable();
+        }
+    }
+
+    function saveToFile() {
+        const data = {
+            vehicles,
+            totalVehicles: vehicles.filter((v) => v.status === "Estacionado").length,
+            totalEarnings: totalEarnings.toFixed(2),
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "text/plain" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "dados.txt";
+        link.click();
+    }
+
+    updateTable();
+    setInterval(updateTable, 1000); // Atualiza a tabela a cada segundo
+</script>
+</body>
+</html>
